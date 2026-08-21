@@ -66,7 +66,20 @@ export const createCommentBodySchema = z.object({
   content: z.string().min(1)
 });
 
-export const reviewRequestBodySchema = z.object({
-  decision: z.nativeEnum(ReviewDecision),
-  comment: z.string().trim().optional()
-});
+export const reviewRequestBodySchema = z
+  .object({
+    decision: z.nativeEnum(ReviewDecision),
+    comment: z.string().trim().optional()
+  })
+  .refine(
+    (data) => {
+      if (data.decision === 'REJECTED') {
+        return Boolean(data.comment && data.comment.trim().length > 0);
+      }
+      return true;
+    },
+    {
+      message: '반려 사유를 입력해 주세요.',
+      path: ['comment']
+    }
+  );

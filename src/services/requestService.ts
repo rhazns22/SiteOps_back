@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import type { CurrentUser } from '../types/http';
 import { conflict, forbidden } from '../utils/errors';
 import {
+  assertRequestAccess,
   canEditRequest,
   canReviewRequest,
   canWorkOnRequest,
@@ -146,7 +147,7 @@ export const updateRequestStatus = async (
     afterImagePath?: string | null;
   } = {}
 ) => {
-  const request = await getRequestForAccess(requestId);
+  const request = await assertRequestAccess(user, requestId);
   const allowedTargets =
     user.role === 'ADMIN' && request.status === 'COMPLETED'
       ? ['IN_PROGRESS']

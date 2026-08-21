@@ -15,7 +15,13 @@ export const optionalDate = z.preprocess((value) => {
     return null;
   }
 
-  const date = new Date(String(value).replaceAll('.', '-'));
+  if (value instanceof Date) {
+    return value;
+  }
+
+  const str = String(value).trim();
+  const normalized = str.includes('.') && !str.includes('T') ? str.replaceAll('.', '-') : str;
+  const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? value : date;
 }, z.date().nullable());
 

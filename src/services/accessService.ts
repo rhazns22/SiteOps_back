@@ -52,7 +52,6 @@ export const canAccessRequest = (user: CurrentUser, request: RequestAccessRecord
 };
 
 export const canReviewRequest = (user: CurrentUser, request: RequestAccessRecord) => {
-  if (user.role === 'ADMIN') return true;
   return user.role === 'CLIENT' && request.project.clientId === user.clientId;
 };
 
