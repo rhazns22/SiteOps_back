@@ -29,6 +29,66 @@ Node.js, Express, TypeScript, Prisma ORM, PostgreSQL(Supabase)을 기반으로 �
 
 ---
 
+## 💡 개발자를 위한 꿀팁 & 아키텍처 패턴 (Developer Pro-Tips)
+
+### 1. `asyncHandler` 라우터 래퍼를 통한 비동기 에러 핸들링 단축
+모든 Express 비동기 컨트롤러에서 반복되는 `try-catch` 블록 대신 `asyncHandler` 고차 함수를 사용하여 간결하고 안전하게 글로벌 에러 핸들러로 예외를 위임합니다.
+
+```typescript
+// src/middleware/asyncHandler.ts
+export const asyncHandler = (fn: RequestHandler): RequestHandler => 
+  (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+```
+
+### 2. Zod 스키마 기반 요청 검증 파서 (`parseOrThrow`)
+요청 Body/Params/Query 검증 시 Zod 스키마를 단 한 줄로 파싱하고, 실시간으로 유효하지 않은 데이터에 대한 커스텀 `BadRequestError`를 생성합니다.
+
+```typescript
+// src/utils/validators.ts
+export const parseOrThrow = <T>(schema: ZodSchema<T>, data: unknown): T => {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw badRequest('입력 값이 올바르지 않습니다.', result.error.flatten());
+  }
+  return result.data;
+};
+```
+
+### 3. Supabase Private Storage & Signed URL 발급 패턴
+보안을 위해 비공개 Storage 버킷을 유지하고, 클라이언트에게 유효 기간이 지정된 서명 URL(Signed URL)을 발급하여 무단 파일 접근을 방지합니다.
+
+```typescript
+// src/lib/supabase.ts
+export const createSignedUrl = async (path: string, expiresIn = 3600) => {
+  const { data, error } = await supabase.storage
+    .from('siteops-attachments')
+    .createSignedUrl(path, expiresIn);
+
+  if (error) throw error;
+  return data.signedUrl;
+};
+```
+
+### 4. Prisma Client 싱글톤(Singleton) 연결 관리
+개발 환경에서의 Hot Reloading 시 여러 개의 데이터베이스 커넥션이 중복 수립되어 커넥션 풀이 고갈되는 현상을 예방하기 위한 글로벌 싱글톤 패턴입니다.
+
+```typescript
+// src/lib/prisma.ts
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+export default prisma;
+```
+
+---
+
 ## ⚙️ 환경 변수 설정 (Environment Setup)
 
 보안을 위해 비밀키 및 DB URL은 `.env` 파일에 보관하며, 저장소에는 템플릿인 `.env.example`만 포함됩니다.
