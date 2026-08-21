@@ -1,0 +1,217 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  WORKER
+  CLIENT
+}
+
+enum RequestStatus {
+  RECEIVED
+  IN_PROGRESS
+  REVIEW_REQUESTED
+  COMPLETED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ActivityType {
+  REQUEST_CREATED
+  REQUEST_UPDATED
+  ASSIGNEE_CHANGED
+  STATUS_CHANGED
+  COMMENT_CREATED
+  PIN_CREATED
+  PIN_DELETED
+  REVIEW_REQUESTED
+  REVIEW_APPROVED
+  REVIEW_REJECTED
+  ATTACHMENT_ADDED
+}
+
+enum ReviewDecision {
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  ASSIGNED
+  COMMENT
+  REVIEW_REQUESTED
+  APPROVED
+  REJECTED
+  DUE_SOON
+}
+
+model User {
+  id                   String               @id @default(uuid())
+  email                String               @unique
+  passwordHash         String
+  name                 String
+  role                 Role
+  clientId             String?
+  client               Client?              @relation(fields: [clientId], references: [id])
+  assignedRequests     MaintenanceRequest[] @relation("AssigneeRelation")
+  createdRequests      MaintenanceRequest[] @relation("RequesterRelation")
+  activities           RequestActivity[]
+  reviews              RequestReview[]
+  comments             RequestComment[]
+  notifications        Notification[]
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([clientId])
+  @@index([role])
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  users     User[]
+  projects  Project[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Project {
+  id                  String               @id @default(uuid())
+  name                String               @unique
+  websiteUrl          String
+  description         String?
+  clientId            String
+  client              Client               @relation(fields: [clientId], references: [id])
+  maintenanceRequests MaintenanceRequest[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([clientId])
+}
+
+model MaintenanceRequest {
+  id                String              @id @default(uuid())
+  projectId         String
+  project           Project             @relation(fields: [projectId], references: [id])
+  requesterId       String
+  requester         User                @relation("RequesterRelation", fields: [requesterId], references: [id])
+  assigneeId        String?
+  assignee          User?               @relation("AssigneeRelation", fields: [assigneeId], references: [id])
+  title             String
+  description       String
+  pageUrl           String
+  status            RequestStatus       @default(RECEIVED)
+  priority          Priority            @default(NORMAL)
+  dueDate           DateTime?
+  beforeImagePath   String?
+  afterImagePath    String?
+  reviewRequestedAt DateTime?
+  completedAt       DateTime?
+  attachments       RequestAttachment[]
+  pins              RequestPin[]
+  comments          RequestComment[]
+  activities        RequestActivity[]
+  reviews           RequestReview[]
+  notifications     Notification[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([projectId])
+  @@index([requesterId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+}
+
+model RequestAttachment {
+  id           String             @id @default(uuid())
+  requestId    String
+  request      MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  storagePath  String             @unique
+  originalName String
+  mimeType     String
+  size         Int
+  kind         String
+  createdAt    DateTime           @default(now())
+
+  @@index([requestId])
+}
+
+model RequestPin {
+  id        String             @id @default(uuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  xPercent  Float
+  yPercent  Float
+  content   String
+  sortOrder Int                @default(0)
+  createdAt DateTime           @default(now())
+}
+
+model RequestComment {
+  id        String             @id @default(uuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User               @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime           @default(now())
+}
+
+model RequestActivity {
+  id        String             @id @default(uuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?              @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  type      ActivityType
+  metadata  Json?
+  createdAt DateTime           @default(now())
+
+  @@index([requestId])
+  @@index([actorId])
+}
+
+model RequestReview {
+  id         String             @id @default(uuid())
+  requestId  String
+  request    MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer   User               @relation(fields: [reviewerId], references: [id])
+  decision   ReviewDecision
+  comment    String?
+  createdAt  DateTime           @default(now())
+
+  @@index([requestId])
+  @@index([reviewerId])
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String?
+  request   MaintenanceRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean             @default(false)
+  createdAt DateTime            @default(now())
+
+  @@index([userId])
+  @@index([requestId])
+  @@index([isRead])
+}
