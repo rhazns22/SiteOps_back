@@ -189,25 +189,28 @@ uploadRouter.get(
       throw badRequest('path query가 필요합니다.');
     }
 
-    const request = await prisma.maintenanceRequest.findFirst({
-      where: {
-        OR: [
-          { beforeImagePath: storagePath },
-          { afterImagePath: storagePath },
-          { attachments: { some: { storagePath } } }
-        ]
-      },
-      include: { project: true }
+    const attachment = await prisma.requestAttachment.findUnique({
+      where: { storagePath },
+      select: { requestId: true }
     });
 
-    if (!request) {
+    let targetRequestId = attachment?.requestId;
+
+    if (!targetRequestId) {
+      const request = await prisma.maintenanceRequest.findFirst({
+        where: {
+          OR: [{ beforeImagePath: storagePath }, { afterImagePath: storagePath }]
+        },
+        select: { id: true }
+      });
+      targetRequestId = request?.id;
+    }
+
+    if (!targetRequestId) {
       throw notFound('파일을 찾을 수 없습니다.');
     }
 
-    const accessRecord = await assertRequestAccess(user, request.id);
-    if (accessRecord.id !== request.id) {
-      throw forbidden();
-    }
+    await assertRequestAccess(user, targetRequestId);
 
     const { data, error } = await getSupabase()
       .storage
