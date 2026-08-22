@@ -179,6 +179,8 @@ authKakaoRouter.get(
       id: number | string;
       kakao_account?: {
         email?: string;
+        is_email_valid?: boolean;
+        is_email_verified?: boolean;
         profile?: {
           nickname?: string;
         };
@@ -198,6 +200,35 @@ authKakaoRouter.get(
     let user = await prisma.user.findUnique({
       where: { kakaoId }
     });
+
+    if (!user && kakaoEmail) {
+      const canLinkByEmail =
+        kakaoUser.kakao_account?.is_email_valid !== false &&
+        kakaoUser.kakao_account?.is_email_verified !== false;
+
+      if (canLinkByEmail) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: {
+              equals: kakaoEmail,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        if (existingUser?.kakaoId === kakaoId) {
+          user = existingUser;
+        } else if (existingUser && !existingUser.kakaoId) {
+          user = await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              kakaoId,
+              authProvider: 'KAKAO'
+            }
+          });
+        }
+      }
+    }
 
     if (!user) {
       // Check if invitation intent hash was attached
@@ -326,12 +357,21 @@ authKakaoRouter.post(
 
     if (!exchangeRecord || exchangeRecord.expiresAt < new Date()) {
       if (exchangeRecord) {
-        await prisma.oAuthExchangeCode.delete({ where: { id: exchangeRecord.id } });
+        await prisma.oAuthExchangeCode.deleteMany({ where: { id: exchangeRecord.id } });
       }
       throw unauthorized('유효하지 않거나 만료된 교환 코드입니다.');
     }
 
-    await prisma.oAuthExchangeCode.delete({ where: { id: exchangeRecord.id } });
+    const consumed = await prisma.oAuthExchangeCode.deleteMany({
+      where: {
+        id: exchangeRecord.id,
+        codeHash
+      }
+    });
+
+    if (consumed.count !== 1) {
+      throw unauthorized('유효하지 않거나 만료된 교환 코드입니다.');
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: exchangeRecord.userId }

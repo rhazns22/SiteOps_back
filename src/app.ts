@@ -31,6 +31,14 @@ app.use(
 app.use(apiLimiter);
 app.use(express.json({ limit: '1mb' }));
 
+// Cache-Control: Prevent browser / CDN proxy caching of API responses
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth/kakao', authKakaoRouter);
 app.use('/api/v1/auth', authRouter);
