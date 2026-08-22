@@ -6,6 +6,8 @@ import { env } from './config/env';
 import { apiLimiter } from './middleware/rateLimit';
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware';
 import { authRouter } from './routes/authRoutes';
+import { authKakaoRouter } from './routes/authKakaoRoutes';
+import { invitationRouter } from './routes/invitationRoutes';
 import { projectRouter } from './routes/projectRoutes';
 import { requestRouter } from './routes/requestRoutes';
 import { uploadRouter } from './routes/uploadRoutes';
@@ -30,7 +32,9 @@ app.use(apiLimiter);
 app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/v1/health', healthRouter);
+app.use('/api/v1/auth/kakao', authKakaoRouter);
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/invitations', invitationRouter);
 app.use('/api/v1/projects', projectRouter);
 app.use('/api/v1/requests', requestRouter);
 app.use('/api/v1/uploads', uploadRouter);

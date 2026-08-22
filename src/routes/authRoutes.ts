@@ -23,7 +23,7 @@ authRouter.post(
       where: { email }
     });
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw unauthorized('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 

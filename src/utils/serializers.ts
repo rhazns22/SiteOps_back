@@ -58,7 +58,7 @@ const activityStatus = (type: ActivityType): RequestStatus => {
   return 'IN_PROGRESS';
 };
 
-export const toUserDto = (user: Pick<User, 'id' | 'email' | 'name' | 'role' | 'clientId'>) => ({
+export const toUserDto = (user: { id: string; email: string | null; name: string; role: Role; clientId: string | null }) => ({
   id: user.id,
   email: user.email,
   name: user.name,
