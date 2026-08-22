@@ -43,6 +43,7 @@ const activityMessage: Record<ActivityType, string> = {
   STATUS_CHANGED: '요청 상태가 변경되었습니다.',
   COMMENT_CREATED: '댓글이 등록되었습니다.',
   PIN_CREATED: '수정 위치가 추가되었습니다.',
+  PIN_UPDATED: '수정 위치가 변경되었습니다.',
   PIN_DELETED: '수정 위치가 삭제되었습니다.',
   REVIEW_REQUESTED: '작업 완료 후 검수 요청을 보냈습니다.',
   REVIEW_APPROVED: '승인 및 완료 처리되었습니다.',

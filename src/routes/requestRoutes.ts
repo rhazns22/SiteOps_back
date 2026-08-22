@@ -20,11 +20,12 @@ import {
   pinParamsSchema,
   requestParamsSchema,
   reviewRequestBodySchema,
+  updatePinSchema,
   updateRequestBodySchema,
   updateStatusBodySchema
 } from '../validators/requestValidators';
 import { parseOrThrow } from '../utils/validators';
-import { forbidden, notFound } from '../utils/errors';
+import { conflict, forbidden, notFound } from '../utils/errors';
 import { toRequestDto } from '../utils/serializers';
 import type { AuthenticatedRequest } from '../types/http';
 
@@ -355,7 +356,11 @@ requestRouter.post(
     const user = (req as AuthenticatedRequest).user;
     const { requestId } = parseOrThrow(requestParamsSchema, req.params);
     const body = parseOrThrow(createPinSchema, req.body);
-    await assertRequestAccess(user, requestId);
+    const requestRecord = await assertRequestAccess(user, requestId);
+
+    if (requestRecord.status === 'COMPLETED') {
+      throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
 
     const request = await prisma.$transaction(async (tx) => {
       const nextOrder =
@@ -391,12 +396,77 @@ requestRouter.post(
   })
 );
 
+requestRouter.patch(
+  '/:requestId/pins/:pinId',
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { requestId, pinId } = parseOrThrow(pinParamsSchema, req.params);
+    const body = parseOrThrow(updatePinSchema, req.body);
+    const requestRecord = await assertRequestAccess(user, requestId);
+
+    if (requestRecord.status === 'COMPLETED') {
+      throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
+
+    const pin = await prisma.requestPin.findFirst({
+      where: { id: pinId, requestId }
+    });
+
+    if (!pin) {
+      throw notFound('핀을 찾을 수 없습니다.');
+    }
+
+    const coordsChanged =
+      (body.xPercent !== undefined && body.xPercent !== pin.xPercent) ||
+      (body.yPercent !== undefined && body.yPercent !== pin.yPercent);
+    const contentChanged = body.content !== undefined && body.content !== pin.content;
+
+    const updatedPin = await prisma.$transaction(async (tx) => {
+      const updated = await tx.requestPin.update({
+        where: { id: pinId },
+        data: {
+          xPercent: body.xPercent ?? undefined,
+          yPercent: body.yPercent ?? undefined,
+          content: body.content ?? undefined
+        }
+      });
+
+      await createActivity(tx, {
+        requestId,
+        actorId: user.id,
+        type: 'PIN_UPDATED',
+        metadata: {
+          pinId,
+          coordsChanged,
+          contentChanged
+        }
+      });
+
+      return updated;
+    });
+
+    res.json({
+      id: updatedPin.id,
+      requestId: updatedPin.requestId,
+      xPercent: updatedPin.xPercent,
+      yPercent: updatedPin.yPercent,
+      content: updatedPin.content,
+      sortOrder: updatedPin.sortOrder,
+      createdAt: updatedPin.createdAt.toISOString()
+    });
+  })
+);
+
 requestRouter.delete(
   '/:requestId/pins/:pinId',
   asyncHandler(async (req, res) => {
     const user = (req as AuthenticatedRequest).user;
     const { requestId, pinId } = parseOrThrow(pinParamsSchema, req.params);
-    await assertRequestAccess(user, requestId);
+    const requestRecord = await assertRequestAccess(user, requestId);
+
+    if (requestRecord.status === 'COMPLETED') {
+      throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
 
     const pin = await prisma.requestPin.findFirst({
       where: { id: pinId, requestId }
@@ -411,7 +481,8 @@ requestRouter.delete(
       await createActivity(tx, {
         requestId,
         actorId: user.id,
-        type: 'PIN_DELETED'
+        type: 'PIN_DELETED',
+        metadata: { pinId }
       });
     });
 

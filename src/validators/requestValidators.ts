@@ -25,9 +25,19 @@ export const listRequestsQuerySchema = z.object({
 export const createPinSchema = z.object({
   xPercent: z.number().min(0).max(100),
   yPercent: z.number().min(0).max(100),
-  content: z.string().min(1),
+  content: z.string().trim().min(1).max(200),
   sortOrder: z.number().int().min(0).optional()
 });
+
+export const updatePinSchema = z
+  .object({
+    xPercent: z.number().min(0).max(100).optional(),
+    yPercent: z.number().min(0).max(100).optional(),
+    content: z.string().trim().min(1).max(200).optional()
+  })
+  .refine((val) => Object.keys(val).length > 0, {
+    message: '수정할 핀 내용 또는 좌표가 필요합니다.'
+  });
 
 export const createRequestBodySchema = z.object({
   projectId: z.string().min(1),

@@ -203,8 +203,8 @@ authKakaoRouter.get(
 
     if (!user && kakaoEmail) {
       const canLinkByEmail =
-        kakaoUser.kakao_account?.is_email_valid !== false &&
-        kakaoUser.kakao_account?.is_email_verified !== false;
+        kakaoUser.kakao_account?.is_email_valid === true &&
+        kakaoUser.kakao_account?.is_email_verified === true;
 
       if (canLinkByEmail) {
         const existingUser = await prisma.user.findFirst({
