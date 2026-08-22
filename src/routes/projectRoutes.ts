@@ -24,7 +24,7 @@ projectRouter.get(
       where: accessibleProjectWhere(user),
       include: {
         client: { include: { users: { select: { name: true } } } },
-        maintenanceRequests: { select: { status: true, dueDate: true } }
+        maintenanceRequests: { where: { deletedAt: null }, select: { status: true, dueDate: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -44,7 +44,7 @@ projectRouter.get(
       where: { id: projectId },
       include: {
         client: { include: { users: { select: { name: true } } } },
-        maintenanceRequests: { select: { status: true, dueDate: true } }
+        maintenanceRequests: { where: { deletedAt: null }, select: { status: true, dueDate: true } }
       }
     });
 
@@ -66,7 +66,7 @@ projectRouter.post(
       },
       include: {
         client: { include: { users: { select: { name: true } } } },
-        maintenanceRequests: { select: { status: true, dueDate: true } }
+        maintenanceRequests: { where: { deletedAt: null }, select: { status: true, dueDate: true } }
       }
     });
 
@@ -89,7 +89,7 @@ projectRouter.patch(
       },
       include: {
         client: { include: { users: { select: { name: true } } } },
-        maintenanceRequests: { select: { status: true, dueDate: true } }
+        maintenanceRequests: { where: { deletedAt: null }, select: { status: true, dueDate: true } }
       }
     });
 

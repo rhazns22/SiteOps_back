@@ -15,6 +15,8 @@ import { dashboardRouter } from './routes/dashboardRoutes';
 import { notificationRouter } from './routes/notificationRoutes';
 import { healthRouter } from './routes/healthRoutes';
 import { userRouter } from './routes/userRoutes';
+import { clientRouter } from './routes/clientRoutes';
+import { settingsRouter } from './routes/settingsRoutes';
 
 export const app = express();
 
@@ -49,6 +51,8 @@ app.use('/api/v1/uploads', uploadRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/users', userRouter);
+app.use('/api/v1/clients', clientRouter);
+app.use('/api/v1/settings', settingsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

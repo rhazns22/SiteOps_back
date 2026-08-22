@@ -66,6 +66,10 @@ const safeFileName = (name: string) => path.basename(name).replace(/[^a-zA-Z0-9.
 const assertCanUploadAttachment = async (user: CurrentUser, requestId: string, kind: string) => {
   const request = await assertRequestAccess(user, requestId);
 
+  if (request.deletedAt) {
+    throw conflict('삭제된 요청에는 첨부파일을 업로드할 수 없습니다.');
+  }
+
   if (request.status === 'COMPLETED') {
     throw conflict('완료된 요청에는 추가 첨부파일을 업로드할 수 없습니다.');
   }

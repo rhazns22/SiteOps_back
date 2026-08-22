@@ -138,7 +138,14 @@ invitationRouter.post(
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-    const days = typeof expiresInDays === 'number' && expiresInDays > 0 ? expiresInDays : 7;
+    const workspace = await prisma.workspaceSetting.findUnique({
+      where: { id: 'workspace' },
+      select: { inviteExpiresInDays: true }
+    });
+    const days =
+      typeof expiresInDays === 'number' && expiresInDays > 0
+        ? expiresInDays
+        : workspace?.inviteExpiresInDays ?? 7;
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const invitation = await prisma.invitation.create({

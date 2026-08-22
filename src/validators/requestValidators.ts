@@ -19,7 +19,8 @@ export const listRequestsQuerySchema = z.object({
   projectId: z.string().trim().optional(),
   assigneeId: z.string().trim().optional(),
   dueFrom: optionalDate.optional(),
-  dueTo: optionalDate.optional()
+  dueTo: optionalDate.optional(),
+  deleted: z.enum(['active', 'only', 'include']).optional()
 });
 
 export const createPinSchema = z.object({
@@ -27,7 +28,7 @@ export const createPinSchema = z.object({
   yPercent: z.number().min(0).max(100),
   content: z.string().trim().min(1).max(200),
   sortOrder: z.number().int().min(0).optional()
-});
+}).strict();
 
 export const updatePinSchema = z
   .object({
@@ -35,6 +36,7 @@ export const updatePinSchema = z
     yPercent: z.number().min(0).max(100).optional(),
     content: z.string().trim().min(1).max(200).optional()
   })
+  .strict()
   .refine((val) => Object.keys(val).length > 0, {
     message: '수정할 핀 내용 또는 좌표가 필요합니다.'
   });
@@ -47,7 +49,7 @@ export const createRequestBodySchema = z.object({
   priority: z.nativeEnum(Priority).default('NORMAL'),
   dueDate: optionalDate.optional(),
   pins: z.array(createPinSchema).optional()
-});
+}).strict();
 
 export const updateRequestBodySchema = z
   .object({
@@ -55,11 +57,19 @@ export const updateRequestBodySchema = z
     description: z.string().min(1).optional(),
     pageUrl: z.string().url().optional(),
     priority: z.nativeEnum(Priority).optional(),
-    dueDate: optionalDate.optional()
+    dueDate: optionalDate.optional(),
+    updatedAt: optionalDate.optional()
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: '수정할 값이 필요합니다.'
   });
+
+export const deleteRequestBodySchema = z
+  .object({
+    reason: z.string().trim().max(500).optional()
+  })
+  .strict();
 
 export const assignRequestBodySchema = z.object({
   assigneeId: z.string().min(1).nullable()

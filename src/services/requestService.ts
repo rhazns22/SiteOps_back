@@ -4,6 +4,7 @@ import type { CurrentUser } from '../types/http';
 import { conflict, forbidden } from '../utils/errors';
 import {
   assertRequestAccess,
+  accessibleRequestWhere,
   canEditRequest,
   canReviewRequest,
   canWorkOnRequest,
@@ -48,9 +49,12 @@ export const buildListWhere = (
     assigneeId?: string;
     dueFrom?: Date | null;
     dueTo?: Date | null;
+    deleted?: 'active' | 'only' | 'include';
   }
 ): Prisma.MaintenanceRequestWhereInput => {
-  const where: Prisma.MaintenanceRequestWhereInput = {};
+  const where: Prisma.MaintenanceRequestWhereInput = {
+    ...accessibleRequestWhere(user, { deleted: filters.deleted })
+  };
 
   if (filters.q) {
     where.OR = [
@@ -70,14 +74,6 @@ export const buildListWhere = (
       ...(filters.dueFrom ? { gte: filters.dueFrom } : {}),
       ...(filters.dueTo ? { lte: filters.dueTo } : {})
     };
-  }
-
-  if (user.role === 'CLIENT') {
-    where.project = { clientId: user.clientId ?? '__missing_client__' };
-  }
-
-  if (user.role === 'WORKER') {
-    where.assigneeId = user.id;
   }
 
   return where;
@@ -238,9 +234,53 @@ export const updateRequestStatus = async (
 
 export const assertCanEditRequest = async (user: CurrentUser, requestId: string) => {
   const request = await getRequestForAccess(requestId);
+  if (request.status === 'COMPLETED') {
+    throw conflict('완료된 요청은 수정할 수 없습니다.');
+  }
   if (!canEditRequest(user, request)) {
     throw forbidden();
   }
+  return request;
+};
+
+export const assertCanDeleteRequest = async (user: CurrentUser, requestId: string) => {
+  const request = await getRequestForAccess(requestId);
+
+  if (request.deletedAt) {
+    throw conflict('이미 삭제된 요청입니다.');
+  }
+
+  if (request.status === 'COMPLETED') {
+    throw conflict('완료된 요청은 삭제할 수 없습니다.');
+  }
+
+  if (user.role === 'ADMIN') {
+    return request;
+  }
+
+  if (
+    user.role === 'CLIENT' &&
+    request.requesterId === user.id &&
+    request.project.clientId === user.clientId &&
+    request.status === 'RECEIVED'
+  ) {
+    return request;
+  }
+
+  throw forbidden();
+};
+
+export const assertCanRestoreRequest = async (user: CurrentUser, requestId: string) => {
+  const request = await getRequestForAccess(requestId);
+
+  if (user.role !== 'ADMIN') {
+    throw forbidden();
+  }
+
+  if (!request.deletedAt) {
+    throw conflict('삭제되지 않은 요청입니다.');
+  }
+
   return request;
 };
 

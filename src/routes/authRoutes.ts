@@ -35,7 +35,8 @@ authRouter.post(
     const accessToken = jwt.sign(
       {
         sub: user.id,
-        role: user.role
+        role: user.role,
+        sv: user.sessionVersion
       },
       requiredEnv('JWT_SECRET'),
       { expiresIn: '7d' }

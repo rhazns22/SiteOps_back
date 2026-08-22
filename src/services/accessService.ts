@@ -7,13 +7,24 @@ type RequestAccessRecord = MaintenanceRequest & {
   project: Project;
 };
 
-export const accessibleRequestWhere = (user: CurrentUser) => {
+export const accessibleRequestWhere = (
+  user: CurrentUser,
+  options: { deleted?: 'active' | 'only' | 'include' } = {}
+) => {
+  const deletedFilter =
+    user.role === 'ADMIN' && options.deleted === 'include'
+      ? {}
+      : user.role === 'ADMIN' && options.deleted === 'only'
+        ? { deletedAt: { not: null } }
+        : { deletedAt: null };
+
   if (user.role === 'ADMIN') {
-    return {};
+    return deletedFilter;
   }
 
   if (user.role === 'CLIENT') {
     return {
+      ...deletedFilter,
       project: {
         clientId: user.clientId ?? '__missing_client__'
       }
@@ -21,6 +32,7 @@ export const accessibleRequestWhere = (user: CurrentUser) => {
   }
 
   return {
+    ...deletedFilter,
     assigneeId: user.id
   };
 };
@@ -46,21 +58,25 @@ export const accessibleProjectWhere = (user: CurrentUser) => {
 };
 
 export const canAccessRequest = (user: CurrentUser, request: RequestAccessRecord) => {
+  if (request.deletedAt && user.role !== 'ADMIN') return false;
   if (user.role === 'ADMIN') return true;
   if (user.role === 'CLIENT') return request.project.clientId === user.clientId;
   return request.assigneeId === user.id;
 };
 
 export const canReviewRequest = (user: CurrentUser, request: RequestAccessRecord) => {
+  if (request.deletedAt) return false;
   return user.role === 'CLIENT' && request.project.clientId === user.clientId;
 };
 
 export const canWorkOnRequest = (user: CurrentUser, request: RequestAccessRecord) => {
+  if (request.deletedAt) return false;
   if (user.role === 'ADMIN') return true;
   return user.role === 'WORKER' && request.assigneeId === user.id;
 };
 
 export const canEditRequest = (user: CurrentUser, request: RequestAccessRecord) => {
+  if (request.deletedAt || request.status === 'COMPLETED') return false;
   if (user.role === 'ADMIN') return true;
   return (
     user.role === 'CLIENT' &&

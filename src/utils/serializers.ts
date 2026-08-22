@@ -48,7 +48,9 @@ const activityMessage: Record<ActivityType, string> = {
   REVIEW_REQUESTED: '작업 완료 후 검수 요청을 보냈습니다.',
   REVIEW_APPROVED: '승인 및 완료 처리되었습니다.',
   REVIEW_REJECTED: '반려 및 재수정 요청이 등록되었습니다.',
-  ATTACHMENT_ADDED: '첨부파일이 등록되었습니다.'
+  ATTACHMENT_ADDED: '첨부파일이 등록되었습니다.',
+  REQUEST_DELETED: '요청이 삭제되었습니다.',
+  REQUEST_RESTORED: '삭제된 요청이 복원되었습니다.'
 };
 
 const activityStatus = (type: ActivityType): RequestStatus => {
@@ -59,12 +61,22 @@ const activityStatus = (type: ActivityType): RequestStatus => {
   return 'IN_PROGRESS';
 };
 
-export const toUserDto = (user: { id: string; email: string | null; name: string; role: Role; clientId: string | null }) => ({
+export const toUserDto = (user: {
+  id: string;
+  email: string | null;
+  name: string;
+  role: Role;
+  clientId: string | null;
+  phone?: string | null;
+  avatarPath?: string | null;
+}) => ({
   id: user.id,
   email: user.email,
   name: user.name,
   role: user.role,
-  clientId: user.clientId
+  clientId: user.clientId,
+  phone: user.phone,
+  avatarPath: user.avatarPath
 });
 
 export const toProjectDto = (project: ProjectWithClient) => {
@@ -116,6 +128,9 @@ export const toRequestDto = (request: RequestWithRelations) => ({
   afterImagePath: request.afterImagePath,
   reviewRequestedAt: request.reviewRequestedAt?.toISOString() ?? null,
   completedAt: request.completedAt?.toISOString() ?? null,
+  deletedAt: request.deletedAt?.toISOString() ?? null,
+  deletedById: request.deletedById ?? null,
+  deleteReason: request.deleteReason ?? null,
   createdAt: request.createdAt.toISOString(),
   updatedAt: request.updatedAt.toISOString(),
   pins:

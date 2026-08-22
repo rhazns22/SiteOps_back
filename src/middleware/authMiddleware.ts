@@ -7,6 +7,7 @@ import type { AuthenticatedRequest, CurrentUser } from '../types/http';
 
 interface JwtPayload {
   sub: string;
+  sv?: number;
 }
 
 export const authenticateToken = async (req: Request, _res: Response, next: NextFunction) => {
@@ -25,6 +26,9 @@ export const authenticateToken = async (req: Request, _res: Response, next: Next
         id: true,
         email: true,
         name: true,
+        phone: true,
+        avatarPath: true,
+        sessionVersion: true,
         role: true,
         clientId: true
       }
@@ -32,6 +36,10 @@ export const authenticateToken = async (req: Request, _res: Response, next: Next
 
     if (!user) {
       throw unauthorized('인증 사용자를 찾을 수 없습니다.');
+    }
+
+    if ((decoded.sv ?? 0) !== user.sessionVersion) {
+      throw unauthorized('인증 세션이 만료되었습니다. 다시 로그인해 주세요.');
     }
 
     (req as AuthenticatedRequest).user = user;

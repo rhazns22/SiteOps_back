@@ -5,6 +5,8 @@ export interface CurrentUser {
   id: string;
   email: string | null;
   name: string;
+  phone?: string | null;
+  avatarPath?: string | null;
   role: Role;
   clientId: string | null;
 }

@@ -5,6 +5,8 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { assertProjectAccess, assertRequestAccess, canReviewRequest } from '../services/accessService';
 import {
   assertCanEditRequest,
+  assertCanDeleteRequest,
+  assertCanRestoreRequest,
   buildListWhere,
   createActivity,
   notifyRequestAssignee,
@@ -16,6 +18,7 @@ import {
   createCommentBodySchema,
   createPinSchema,
   createRequestBodySchema,
+  deleteRequestBodySchema,
   listRequestsQuerySchema,
   pinParamsSchema,
   requestParamsSchema,
@@ -154,7 +157,25 @@ requestRouter.patch(
     const user = (req as AuthenticatedRequest).user;
     const { requestId } = parseOrThrow(requestParamsSchema, req.params);
     const body = parseOrThrow(updateRequestBodySchema, req.body);
-    await assertCanEditRequest(user, requestId);
+    const current = await assertCanEditRequest(user, requestId);
+
+    if (body.updatedAt && current.updatedAt.getTime() !== body.updatedAt.getTime()) {
+      throw conflict('요청이 다른 사용자에 의해 먼저 수정되었습니다. 새로고침 후 다시 시도해 주세요.');
+    }
+
+    const changedFields = (['title', 'description', 'pageUrl', 'priority', 'dueDate'] as const).filter((field) => {
+      if (!(field in body)) return false;
+      const before = field === 'dueDate' ? current.dueDate?.toISOString() ?? null : current[field];
+      const after =
+        field === 'dueDate'
+          ? body.dueDate?.toISOString() ?? null
+          : body[field];
+      return before !== after;
+    });
+
+    if (changedFields.length === 0) {
+      throw conflict('변경된 값이 없습니다.');
+    }
 
     const request = await prisma.$transaction(async (tx) => {
       const updated = await tx.maintenanceRequest.update({
@@ -172,7 +193,8 @@ requestRouter.patch(
       await createActivity(tx, {
         requestId,
         actorId: user.id,
-        type: 'REQUEST_UPDATED'
+        type: 'REQUEST_UPDATED',
+        metadata: { changedFields }
       });
 
       return updated;
@@ -187,9 +209,62 @@ requestRouter.delete(
   asyncHandler(async (req, res) => {
     const user = (req as AuthenticatedRequest).user;
     const { requestId } = parseOrThrow(requestParamsSchema, req.params);
-    await assertCanEditRequest(user, requestId);
-    await prisma.maintenanceRequest.delete({ where: { id: requestId } });
+    const body = parseOrThrow(deleteRequestBodySchema, req.body ?? {});
+    await assertCanDeleteRequest(user, requestId);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.maintenanceRequest.update({
+        where: { id: requestId },
+        data: {
+          deletedAt: new Date(),
+          deletedById: user.id,
+          deleteReason: body.reason ?? null
+        }
+      });
+
+      await createActivity(tx, {
+        requestId,
+        actorId: user.id,
+        type: 'REQUEST_DELETED',
+        metadata: { reasonProvided: Boolean(body.reason) }
+      });
+    });
+
     res.status(204).send();
+  })
+);
+
+requestRouter.post(
+  '/:requestId/restore',
+  requireRole(['ADMIN']),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { requestId } = parseOrThrow(requestParamsSchema, req.params);
+    await assertCanRestoreRequest(user, requestId);
+
+    const request = await prisma.$transaction(async (tx) => {
+      await tx.maintenanceRequest.update({
+        where: { id: requestId },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          deleteReason: null
+        }
+      });
+
+      await createActivity(tx, {
+        requestId,
+        actorId: user.id,
+        type: 'REQUEST_RESTORED'
+      });
+
+      return tx.maintenanceRequest.findUniqueOrThrow({
+        where: { id: requestId },
+        include: requestInclude
+      });
+    });
+
+    res.json(toRequestDto(request));
   })
 );
 
@@ -293,6 +368,10 @@ requestRouter.post(
     const body = parseOrThrow(createCommentBodySchema, req.body);
     const requestAccess = await assertRequestAccess(user, requestId);
 
+    if (requestAccess.deletedAt) {
+      throw conflict('삭제된 요청에는 댓글을 추가할 수 없습니다.');
+    }
+
     const request = await prisma.$transaction(async (tx) => {
       await tx.requestComment.create({
         data: {
@@ -356,7 +435,11 @@ requestRouter.post(
     const user = (req as AuthenticatedRequest).user;
     const { requestId } = parseOrThrow(requestParamsSchema, req.params);
     const body = parseOrThrow(createPinSchema, req.body);
-    const requestRecord = await assertRequestAccess(user, requestId);
+    const requestRecord = await assertCanEditRequest(user, requestId);
+
+    if (requestRecord.deletedAt) {
+      throw conflict('삭제된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
 
     if (requestRecord.status === 'COMPLETED') {
       throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
@@ -402,7 +485,11 @@ requestRouter.patch(
     const user = (req as AuthenticatedRequest).user;
     const { requestId, pinId } = parseOrThrow(pinParamsSchema, req.params);
     const body = parseOrThrow(updatePinSchema, req.body);
-    const requestRecord = await assertRequestAccess(user, requestId);
+    const requestRecord = await assertCanEditRequest(user, requestId);
+
+    if (requestRecord.deletedAt) {
+      throw conflict('삭제된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
 
     if (requestRecord.status === 'COMPLETED') {
       throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
@@ -462,7 +549,11 @@ requestRouter.delete(
   asyncHandler(async (req, res) => {
     const user = (req as AuthenticatedRequest).user;
     const { requestId, pinId } = parseOrThrow(pinParamsSchema, req.params);
-    const requestRecord = await assertRequestAccess(user, requestId);
+    const requestRecord = await assertCanEditRequest(user, requestId);
+
+    if (requestRecord.deletedAt) {
+      throw conflict('삭제된 요청의 수정 위치(핀)는 변경할 수 없습니다.');
+    }
 
     if (requestRecord.status === 'COMPLETED') {
       throw conflict('완료된 요청의 수정 위치(핀)는 변경할 수 없습니다.');

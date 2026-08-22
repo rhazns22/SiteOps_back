@@ -47,6 +47,8 @@ enum ActivityType {
   REVIEW_APPROVED
   REVIEW_REJECTED
   ATTACHMENT_ADDED
+  REQUEST_DELETED
+  REQUEST_RESTORED
 }
 
 enum ReviewDecision {
@@ -70,16 +72,22 @@ model User {
   authProvider         AuthProvider         @default(LOCAL)
   kakaoId              String?              @unique
   name                 String
+  phone                String?
+  avatarPath           String?
+  sessionVersion       Int                  @default(0)
   role                 Role
   clientId             String?
   client               Client?              @relation(fields: [clientId], references: [id])
+  managedClients       Client[]             @relation("ClientManager")
   assignedRequests     MaintenanceRequest[] @relation("AssigneeRelation")
   createdRequests      MaintenanceRequest[] @relation("RequesterRelation")
+  deletedRequests      MaintenanceRequest[] @relation("DeletedRequestRelation")
   activities           RequestActivity[]
   reviews              RequestReview[]
   comments             RequestComment[]
   notifications        Notification[]
   createdInvitations   Invitation[]         @relation("InvitationCreator")
+  preference           UserPreference?
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 
@@ -89,13 +97,24 @@ model User {
 }
 
 model Client {
-  id          String       @id @default(uuid())
-  name        String       @unique
-  users       User[]
-  projects    Project[]
-  invitations Invitation[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String       @id @default(uuid())
+  name         String       @unique
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  memo         String?
+  isActive     Boolean      @default(true)
+  archivedAt   DateTime?
+  managerId    String?
+  manager      User?        @relation("ClientManager", fields: [managerId], references: [id], onDelete: SetNull)
+  users        User[]
+  projects     Project[]
+  invitations  Invitation[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([isActive])
+  @@index([managerId])
 }
 
 model Project {
@@ -131,6 +150,10 @@ model MaintenanceRequest {
   afterImagePath    String?
   reviewRequestedAt DateTime?
   completedAt       DateTime?
+  deletedAt         DateTime?
+  deletedById       String?
+  deletedBy         User?               @relation("DeletedRequestRelation", fields: [deletedById], references: [id], onDelete: SetNull)
+  deleteReason      String?
   attachments       RequestAttachment[]
   pins              RequestPin[]
   comments          RequestComment[]
@@ -146,6 +169,35 @@ model MaintenanceRequest {
   @@index([status])
   @@index([priority])
   @@index([dueDate])
+  @@index([deletedAt])
+  @@index([deletedById])
+}
+
+model UserPreference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedNotification Boolean  @default(true)
+  commentNotification  Boolean  @default(true)
+  reviewNotification   Boolean  @default(true)
+  approvedNotification Boolean  @default(true)
+  rejectedNotification Boolean  @default(true)
+  deadlineNotification Boolean  @default(true)
+  emailNotification    Boolean  @default(false)
+  appNotification      Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model WorkspaceSetting {
+  id                  String   @id @default("workspace")
+  serviceName         String   @default("SiteOps")
+  defaultDueDays      Int      @default(7)
+  defaultPriority     Priority @default(NORMAL)
+  maxFileSizeMb       Int      @default(10)
+  inviteExpiresInDays Int      @default(7)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model RequestAttachment {
